@@ -1,0 +1,133 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "web3audit-mcp"
+version = "0.1.0"
+description = "Comprehensive smart contract auditing tool powered by local LLMs"
+readme = "README.md"
+authors = [
+    {name = "Web3AuditMCP Team", email = "team@web3audit-mcp.com"}
+]
+maintainers = [
+    {name = "Web3AuditMCP Team", email = "team@web3audit-mcp.com"}
+]
+keywords = [
+    "smart-contracts",
+    "security",
+    "audit",
+    "blockchain",
+    "ethereum",
+    "solidity",
+    "defi",
+    "web3",
+    "llm",
+    "ai"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed"
+]
+requires-python = ">=3.12"
+dependencies = [
+    "ollama>=0.1.7",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "prompt-toolkit>=3.0.0",
+    "httpx>=0.24.0",
+    "toml>=0.10.2",
+    "pydantic>=2.0.0",
+    "click>=8.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0"
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "coverage>=7.0.0"
+]
+security = [
+    "slither-analyzer>=0.9.0",
+    "mythril>=0.23.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/user/web3audit-mcp"
+Repository = "https://github.com/user/web3audit-mcp.git"
+"Bug Tracker" = "https://github.com/user/web3audit-mcp/issues"
+
+[project.scripts]
+web3audit-mcp = "web3audit_mcp.cli:run_cli"
+w3audit = "web3audit_mcp.cli:run_cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["web3audit_mcp"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=web3audit_mcp",
+    "--cov-report=term-missing"
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["web3audit_mcp"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*"
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "ollama.*",
+    "rich.*",
+    "prompt_toolkit.*",
+    "typer.*"
+]
+ignore_missing_imports = true
