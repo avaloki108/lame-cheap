@@ -1,0 +1,183 @@
+version: '3.8'
+
+services:
+  # Main Web3AuditMCP application
+  web3audit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: web3audit-mcp
+    restart: unless-stopped
+    ports:
+      - "8000:8000"    # Web interface
+      - "11434:11434"  # Ollama API
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - audit_cache:/app/cache
+      - ollama_models:/usr/share/ollama/.ollama
+    environment:
+      - PYTHONPATH=/app
+      - WEB3AUDIT_ENV=production
+      - WEB3AUDIT_LOG_LEVEL=INFO
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_PORT=11434
+    networks:
+      - web3audit-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: web3audit-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - web3audit-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL for audit history and results storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: web3audit-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: web3audit
+      POSTGRES_USER: web3audit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-web3audit_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - web3audit-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U web3audit -d web3audit"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: web3audit-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - web3audit
+    networks:
+      - web3audit-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: web3audit-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - web3audit-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: web3audit-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - web3audit-network
+
+  # Log aggregation with Loki
+  loki:
+    image: grafana/loki:latest
+    container_name: web3audit-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki/loki.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - web3audit-network
+
+  # Log shipping with Promtail
+  promtail:
+    image: grafana/promtail:latest
+    container_name: web3audit-promtail
+    restart: unless-stopped
+    volumes:
+      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml
+      - ./logs:/var/log/web3audit
+      - /var/log:/var/log/host:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - web3audit-network
+
+networks:
+  web3audit-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  audit_cache:
+    driver: local
+  ollama_models:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
